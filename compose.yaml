@@ -1,0 +1,60 @@
+services:
+  web:
+    build: .
+    command: |
+      bash -c "
+      python manage.py collectstatic --noinput &&
+      python manage.py migrate &&
+      gunicorn DjangoWeatherReminder.wsgi:application --bind 0.0.0.0:8000"
+    volumes:
+      - .:/app
+      - static_volume:/app/staticfiles
+    ports:
+      - "8000:8000"
+    env_file:
+      - docker.env
+    depends_on:
+      - db
+      - redis
+
+  db:
+    image: postgres:17
+    environment:
+      POSTGRES_DB: postgres
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+
+  redis:
+    image: redis:7
+    ports:
+      - "6379:6379"
+
+  celery:
+    build: .
+    command: celery -A DjangoWeatherReminder worker -l info
+    volumes:
+      - .:/app
+    env_file:
+      - docker.env
+    depends_on:
+      - web
+      - redis
+
+  celery-beat:
+    build: .
+    command: celery -A DjangoWeatherReminder beat -l info
+    volumes:
+      - .:/app
+    env_file:
+      - docker.env
+    depends_on:
+      - web
+      - redis
+
+volumes:
+  postgres_data:
+  static_volume:
